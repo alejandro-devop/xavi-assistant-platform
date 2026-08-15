@@ -26,7 +26,7 @@ bug-reporter → bug-detective → bug-hunter → bug-auditor
   prioritizes    finds the cause   close             through a different path
 ```
 
-- Priority is decided by one question — *can the person finish what they came to do?* — not by technical severity.
+- Priority is decided by one question — _can the person finish what they came to do?_ — not by technical severity.
 - Bug dossiers live in `docs/bugs/`, queued in `docs/bugs/QUEUE.md`.
 - `/bugs-github` imports GitHub issues labeled `bug` into the queue; when a fix is pushed, `issues-close.sh --close` closes the corresponding issues.
 

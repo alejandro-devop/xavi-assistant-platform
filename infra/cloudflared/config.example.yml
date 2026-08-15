@@ -1,0 +1,15 @@
+# Example cloudflared config — the real one lives in ~/.cloudflared/config.yml
+# on the host (with the tunnel's credentials JSON next to it) and is never
+# committed. See infra/README.md for the full tunnel setup.
+
+tunnel: <TUNNEL_NAME>
+credentials-file: /home/<user>/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  # n8n editor — must also be protected with Cloudflare Access (email OTP).
+  - hostname: n8n.<your-domain>
+    service: http://localhost:5678
+  # Gateway API (Phase 1) — authenticates with its own bearer token.
+  - hostname: api.<your-domain>
+    service: http://localhost:8787
+  - service: http_status:404

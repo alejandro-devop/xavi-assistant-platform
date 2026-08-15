@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+# Secret scan on staged changes. This repo is public: nothing sensitive may
+# ever be committed. CI runs gitleaks too, but catching it here is cheaper.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner || {
+    echo ""
+    echo "Commit blocked: gitleaks found something that looks like a secret."
+    echo "If it is a false positive, add it to .gitleaksignore with a comment."
+    exit 1
+  }
+else
+  echo "warning: gitleaks is not installed — secrets not scanned locally (CI still scans)."
+fi

@@ -45,7 +45,7 @@ The single entry point for commands. A small Fastify (TypeScript) API that:
 2. Sends the command text to Ollama to classify the **intent** and extract parameters.
 3. Dispatches to the matching **skill** — usually an n8n webhook — and returns the result as text, ready to be displayed or spoken by the client.
 
-The gateway owns the *skill registry*: a typed catalog mapping intents to n8n webhook URLs. Skills live in n8n; the gateway only routes.
+The gateway owns the _skill registry_: a typed catalog mapping intents to n8n webhook URLs. Skills live in n8n; the gateway only routes.
 
 ### Ollama (host-native)
 
@@ -61,9 +61,9 @@ Runs via `infra/docker-compose.yml` with a persistent volume. Workflow definitio
 
 Two public hostnames, one `cloudflared` daemon on the host:
 
-| Hostname | Target | Protection |
-|---|---|---|
-| `api.<domain>` | Gateway | Bearer token enforced by the gateway itself |
+| Hostname       | Target        | Protection                                                                             |
+| -------------- | ------------- | -------------------------------------------------------------------------------------- |
+| `api.<domain>` | Gateway       | Bearer token enforced by the gateway itself                                            |
 | `n8n.<domain>` | n8n editor UI | **Cloudflare Access** (email OTP) — the editor must never be reachable unauthenticated |
 
 ### iOS app (`apps/ios`, Phase 3)

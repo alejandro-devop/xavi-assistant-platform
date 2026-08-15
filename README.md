@@ -51,6 +51,16 @@ docs/          Architecture, roadmap, ADRs
 - How features and bugs are built: [docs/DEVELOPMENT-WORKFLOW.md](docs/DEVELOPMENT-WORKFLOW.md) — agent chains from [jakos-ai-toolkit](https://github.com/alejandro-devop/jakos-ai-toolkit)
 - Task tracking: GitHub Issues + Milestones (one milestone per phase) once the repo is published.
 
+## Getting started
+
+```bash
+git config core.hooksPath .githooks   # secret-scan hook (needs gitleaks installed)
+pnpm install
+pnpm lint && pnpm typecheck && pnpm format
+```
+
+Infrastructure (n8n, Ollama, the tunnel): see [infra/README.md](infra/README.md).
+
 ## License
 
 TBD before publishing (likely MIT).

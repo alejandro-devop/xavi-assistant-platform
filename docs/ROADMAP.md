@@ -7,15 +7,15 @@ Each phase produces something usable on its own. A phase is done when every chec
 Goal: a healthy, publishable monorepo and the core infrastructure running on the host.
 
 - [x] Git repository and planning docs (this document, architecture, ADRs)
-- [ ] pnpm workspaces + Turborepo scaffolding (`apps/`, `packages/`)
-- [ ] Root tooling: TypeScript config, ESLint + Prettier, `.editorconfig`
-- [ ] Security hygiene: strict `.gitignore`, `.env.example`, gitleaks (pre-commit + CI)
-- [ ] CI: GitHub Actions running lint, typecheck, secret scan
-- [ ] `infra/docker-compose.yml` with n8n (persistent volume, basic auth)
-- [ ] Ollama installed on the host with a small instruct model pulled
-- [ ] Cloudflare Tunnel serving n8n editor behind Cloudflare Access
-- [ ] `infra/README.md`: how to bring everything up from scratch
-- [ ] Agent toolkit wired in: `/cazabugs-init` run against the real environment (see [DEVELOPMENT-WORKFLOW.md](DEVELOPMENT-WORKFLOW.md))
+- [x] pnpm workspaces + Turborepo scaffolding (`apps/`, `packages/`)
+- [x] Root tooling: TypeScript config, ESLint + Prettier, `.editorconfig`
+- [x] Security hygiene: strict `.gitignore`, `.env.example`, gitleaks (pre-commit + CI)
+- [x] CI: GitHub Actions running lint, typecheck, secret scan
+- [x] `infra/docker-compose.yml` with n8n (persistent volume, localhost-only, n8n's built-in auth)
+- [x] Ollama installed on the host with an instruct model pulled (`qwen2.5:7b`, native)
+- [ ] Cloudflare Tunnel serving n8n editor behind Cloudflare Access (needs the domain + tunnel token in `infra/.env`)
+- [x] `infra/README.md`: how to bring everything up from scratch
+- [ ] Agent toolkit wired in: `/cazabugs-init` run against the real environment (see [DEVELOPMENT-WORKFLOW.md](DEVELOPMENT-WORKFLOW.md); waiting on the toolkit's English rewrite to merge)
 
 **Definition of done:** a fresh clone + documented steps brings up n8n and Ollama; the n8n editor is reachable only through Cloudflare Access; CI is green; gitleaks finds nothing.
 

@@ -1,0 +1,50 @@
+# Xavi's containerized infrastructure. Ollama runs natively on the host
+# (ADR-0004); everything else the assistant needs lives here, so a fresh
+# machine only needs Docker + this file + infra/.env to come back up.
+#
+# Bring up:       docker compose up -d                  (n8n only)
+# With tunnel:    docker compose --profile tunnel up -d (requires TUNNEL_TOKEN)
+# Logs:           docker compose logs -f n8n
+
+name: xavi-assistant
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      # Bound to localhost on purpose: the only public entrance is the
+      # Cloudflare Tunnel (behind Cloudflare Access). Never expose this port.
+      # 5679 because 5678 may be taken by other n8n instances on the host.
+      - "127.0.0.1:5679:5678"
+    environment:
+      # n8n >= 1.0 has built-in user management; the owner account is created
+      # on first visit. Cloudflare Access is the outer layer on top of it.
+      - N8N_HOST=${N8N_HOST}
+      - WEBHOOK_URL=https://${N8N_HOST}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/Bogota}
+      # The editor is reached either via the https tunnel or via localhost
+      # during setup; secure cookies would break the plain-http localhost case.
+      - N8N_SECURE_COOKIE=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    extra_hosts:
+      # Lets n8n workflows call the host-native Ollama at
+      # http://host.docker.internal:11434 (ADR-0004).
+      - "host.docker.internal:host-gateway"
+
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    # No ports: cloudflared dials OUT to Cloudflare; nothing listens.
+    # Route hostnames to services in the Cloudflare dashboard:
+    #   n8n.<domain> -> http://n8n:5678   (plus a Cloudflare Access policy!)
+    #   api.<domain> -> http://host.docker.internal:8787   (gateway, Phase 1)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  n8n_data:
