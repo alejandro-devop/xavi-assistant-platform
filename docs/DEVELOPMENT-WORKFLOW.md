@@ -37,11 +37,28 @@ bug-reporter → bug-detective → bug-hunter → bug-auditor
 - **Agents never start or stop services.** The environment (n8n, Ollama, the gateway) is brought up by the human; agents read `ENVIRONMENT.md` to know where everything runs.
 - `ENVIRONMENT.md` (one shared map per project) is created by `/cazabugs-init` / `/forja-init` and must be refreshed whenever the environment changes.
 
+## Running a phase
+
+Phases are executed by the chains, not by the planning assistant. Each phase
+has a detailed spec in [specs/](specs/) — goal, context, decisions already
+taken (never re-asked), behavior, out-of-scope, user-gated steps — ending
+with a **kickoff prompt** ready to paste.
+
+To run one:
+
+1. Open a fresh Claude Code session in this repo. Any capable model works —
+   phase execution is designed to run on an economical model; the deep
+   planning already lives in the specs and protocols.
+2. Paste the spec's kickoff prompt.
+3. The session releases the agents one link at a time: analyst → (your
+   decisions) → architect if needed → builder → reviewer per slice. It
+   pauses between links; state lives on disk, so you can stop and resume in
+   another session at any point.
+4. You make the commits. Agents never do.
+
 ## Setup status
 
-- [x] `cazabugs` and `forja` installed (user scope, from `jakos-ai-toolkit` marketplace)
-- [ ] Toolkit ≥ 0.2.0 (the English rewrite — [PR #1](https://github.com/alejandro-devop/jakos-ai-toolkit/pull/1)) merged and updated locally (`claude plugin marketplace update jakos-ai-toolkit` + reinstall both plugins)
-- [ ] `/cazabugs-init` — run at the end of Phase 0, once n8n/Ollama/tunnels exist and there is a real environment to map
-- [ ] `/forja-init` — run before Phase 1 construction starts (it will reuse the `ENVIRONMENT.md` created by cazabugs)
+- [x] `cazabugs` and `forja` installed at user scope, **v0.2.0** (English rewrite)
+- [x] `/cazabugs-init` + `/forja-init` — run 2026-08-15: protocols, queue and board in `docs/bugs/` + `docs/features/`, shared map in `docs/bugs/ENVIRONMENT.md`, probe at `infra/probe.sh`
 
-As of toolkit 0.2.0 the whole toolkit — agent prose, protocols, dossiers — works in English, so everything it produces in this repo is English too.
+The toolkit — agent prose, protocols, dossiers — works in English, so everything it produces in this repo is English too.

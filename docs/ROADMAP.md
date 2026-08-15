@@ -2,6 +2,8 @@
 
 Each phase produces something usable on its own. A phase is done when every checkbox is checked and the "Definition of done" holds. Once the repo is on GitHub, each phase becomes a Milestone and each checkbox an Issue.
 
+Phases 1–3 are executed by the agent chains, not by hand: each has a detailed spec in [specs/](specs/) ending with a ready-to-paste kickoff prompt. See [DEVELOPMENT-WORKFLOW.md](DEVELOPMENT-WORKFLOW.md#running-a-phase).
+
 ## Phase 0 — Foundation
 
 Goal: a healthy, publishable monorepo and the core infrastructure running on the host.
@@ -23,7 +25,7 @@ Goal: a healthy, publishable monorepo and the core infrastructure running on the
 
 Goal: send a text command with curl, get an intelligent response back.
 
-Built through the `forja` feature chain (run `/forja-init` first — it reuses the cazabugs `ENTORNO.md`).
+Spec: [specs/phase-1-minimal-brain.md](specs/phase-1-minimal-brain.md) — built through the `forja` feature chain.
 
 - [ ] `packages/shared`: command/response types and the skill contract
 - [ ] `apps/gateway`: Fastify service with bearer-token auth
@@ -39,6 +41,8 @@ Built through the `forja` feature chain (run `/forja-init` first — it reuses t
 
 Goal: Xavi does two genuinely useful things every day.
 
+Spec: [specs/phase-2-real-skills.md](specs/phase-2-real-skills.md) — two features, run one at a time.
+
 - [ ] Skill: **Today's agenda** — n8n workflow reading the calendar, returns a natural-language summary
 - [ ] Skill: **Email review** — n8n workflow reading the inbox, returns a prioritized summary
 - [ ] Summarization prompts refined for Ollama (concise, spoken-friendly output)
@@ -51,6 +55,8 @@ Goal: Xavi does two genuinely useful things every day.
 
 Goal: talk to Xavi from the phone; audio never leaves the device.
 
+Spec: [specs/phase-3-ios-app.md](specs/phase-3-ios-app.md). **Hard precondition: the Cloudflare Tunnel is live and `https://api.<domain>/healthz` answers from outside the network** — the tunnel-to-gateway wiring (Phase 1's last item) must be done before this phase starts. Runs on the Mac with Xcode.
+
 - [ ] `apps/ios`: Swift app scaffold (Xcode project in the monorepo)
 - [ ] On-device speech-to-text (`SFSpeechRecognizer`, `requiresOnDeviceRecognition = true`)
 - [ ] Send transcribed text to the gateway; render the response
@@ -61,7 +67,7 @@ Goal: talk to Xavi from the phone; audio never leaves the device.
 
 ## Phase 4 — Evolution
 
-Direction, not commitments. Groomed when Phase 3 ships.
+Direction, not commitments. Groomed when Phase 3 ships — see [specs/phase-4-evolution.md](specs/phase-4-evolution.md) for the grooming rule.
 
 - Voice replies (TTS — on-device iOS voices first)
 - Siri / App Intents integration ("Hey Siri, ask Xavi…")
