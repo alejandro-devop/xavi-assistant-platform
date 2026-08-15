@@ -49,12 +49,24 @@ To run one:
 1. Open a fresh Claude Code session in this repo. Any capable model works —
    phase execution is designed to run on an economical model; the deep
    planning already lives in the specs and protocols.
-2. Paste the spec's kickoff prompt.
+2. Type **`/next-phase`** (or paste the spec's kickoff prompt — same thing,
+   longhand). The command picks the right phase, checks preconditions, and
+   resumes an in-progress chain from disk instead of restarting it.
 3. The session releases the agents one link at a time: analyst → (your
    decisions) → architect if needed → builder → reviewer per slice. It
    pauses between links; state lives on disk, so you can stop and resume in
    another session at any point.
 4. You make the commits. Agents never do.
+
+The chain's subagents come from the **`forja` plugin, not from this repo**:
+on a machine that hasn't run this project before (e.g. the Mac for Phase 3),
+install the toolkit first:
+
+```bash
+claude plugin marketplace add alejandro-devop/jakos-ai-toolkit
+claude plugin install forja@jakos-ai-toolkit
+claude plugin install cazabugs@jakos-ai-toolkit
+```
 
 ## Setup status
 
