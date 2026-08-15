@@ -1,0 +1,36 @@
+{
+  "id": "XaviPing00000001",
+  "name": "ping",
+  "active": true,
+  "settings": {},
+  "nodes": [
+    {
+      "id": "b7b1f7d0-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "b7b1f7d0-0000-4000-8000-00000000000a",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ping",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "b7b1f7d0-0000-4000-8000-000000000002",
+      "name": "Pong",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "// First end-to-end skill: proves the gateway -> n8n -> response loop.\nreturn [{ json: { ok: true, reply: 'pong', receivedText: $json.body?.text ?? null, at: new Date().toISOString() } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Pong", "type": "main", "index": 0 }]]
+    }
+  }
+}

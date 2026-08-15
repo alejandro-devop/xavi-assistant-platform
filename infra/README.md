@@ -84,3 +84,24 @@ Node ≥ 22 + pnpm, this repo and an `infra/.env` — nothing else.
   store. Workflow exports go to `infra/n8n/workflows/` **sanitized**.
 - The n8n image tag: `latest` is fine while the project is single-user;
   pin it if reproducibility starts to matter more than updates.
+
+## Workflows
+
+Sanitized workflow exports live in [n8n/workflows/](n8n/workflows/) and are the
+versioned source of truth. To load one into a running n8n (no editor needed):
+
+```bash
+docker cp n8n/workflows/ping.json xavi-assistant-n8n-1:/tmp/wf.json
+docker exec xavi-assistant-n8n-1 n8n import:workflow --input=/tmp/wf.json
+docker exec xavi-assistant-n8n-1 n8n update:workflow --id=XaviPing00000001 --active=true
+docker restart xavi-assistant-n8n-1
+```
+
+Test the `ping` workflow:
+
+```bash
+curl -s -X POST http://localhost:5679/webhook/ping -H 'content-type: application/json' -d '{"text":"hello"}'
+```
+
+Webhook nodes in exports must carry a `webhookId` — without it, activation
+silently skips registering the production URL.
