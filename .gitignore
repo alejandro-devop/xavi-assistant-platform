@@ -1,0 +1,31 @@
+# --- Secrets: never commit these ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+credentials*.json
+**/cloudflared/*.json
+
+# --- Node ---
+node_modules/
+dist/
+.turbo/
+coverage/
+
+# --- n8n local data (never commit raw exports; sanitized ones go in infra/n8n/workflows/) ---
+infra/n8n/data/
+
+# --- macOS / Xcode ---
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# --- Editors ---
+.idea/
+.vscode/
+*.swp
