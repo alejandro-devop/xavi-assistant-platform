@@ -15,9 +15,9 @@ Goal: a healthy, publishable monorepo and the core infrastructure running on the
 - [x] CI: GitHub Actions running lint, typecheck, secret scan
 - [x] `infra/docker-compose.yml` with n8n (persistent volume, localhost-only, n8n's built-in auth)
 - [x] Ollama installed on the host with an instruct model pulled (`qwen2.5:7b`, native)
-- [ ] Cloudflare Tunnel serving n8n editor behind Cloudflare Access (needs the domain + tunnel token in `infra/.env`)
+- [x] Cloudflare Tunnel serving n8n editor behind Cloudflare Access (locally-managed tunnel `xavi-assistant`; unauthenticated requests are redirected to the Access login)
 - [x] `infra/README.md`: how to bring everything up from scratch
-- [ ] Agent toolkit wired in: `/cazabugs-init` run against the real environment (see [DEVELOPMENT-WORKFLOW.md](DEVELOPMENT-WORKFLOW.md); waiting on the toolkit's English rewrite to merge)
+- [x] Agent toolkit wired in: `/cazabugs-init` run against the real environment (see [DEVELOPMENT-WORKFLOW.md](DEVELOPMENT-WORKFLOW.md))
 
 **Definition of done:** a fresh clone + documented steps brings up n8n and Ollama; the n8n editor is reachable only through Cloudflare Access; CI is green; gitleaks finds nothing.
 
@@ -27,13 +27,13 @@ Goal: send a text command with curl, get an intelligent response back.
 
 Spec: [specs/phase-1-minimal-brain.md](specs/phase-1-minimal-brain.md) — built through the `forja` feature chain.
 
-- [ ] `packages/shared`: command/response types and the skill contract
-- [ ] `apps/gateway`: Fastify service with bearer-token auth
-- [ ] Intent detection via Ollama (small instruct model, structured output)
-- [ ] Skill registry: typed mapping of intents → n8n webhooks
-- [ ] First end-to-end skill: a trivial n8n workflow (e.g. "ping" / echo) triggered through the gateway
-- [ ] Cloudflare Tunnel hostname for the gateway API
-- [ ] Gateway tests (intent routing, auth) in CI
+- [x] `packages/shared`: command/response types and the skill contract
+- [x] `apps/gateway`: Fastify service with bearer-token auth
+- [x] Intent detection via Ollama (small instruct model, structured output)
+- [x] Skill registry: typed mapping of intents → n8n webhooks
+- [x] First end-to-end skill: a trivial n8n workflow (e.g. "ping" / echo) triggered through the gateway
+- [x] Cloudflare Tunnel hostname for the gateway API (`api.<domain>`, no Access in front — the bearer token is its door)
+- [x] Gateway tests (intent routing, auth) in CI
 
 **Definition of done:** `curl -H "Authorization: Bearer …" api.<domain> -d '{"text": "…"}'` classifies the intent and round-trips through n8n from outside the network.
 
@@ -45,11 +45,13 @@ Spec: [specs/phase-2-real-skills.md](specs/phase-2-real-skills.md) — two featu
 
 - [ ] Skill: **Today's agenda** — n8n workflow reading the calendar, returns a natural-language summary
 - [ ] Skill: **Email review** — n8n workflow reading the inbox, returns a prioritized summary
-- [ ] Summarization prompts refined for Ollama (concise, spoken-friendly output)
-- [ ] Sanitized workflow exports committed to `infra/n8n/workflows/`
-- [ ] Fallback behavior: unknown intent → helpful response listing what Xavi can do
+- [x] Summarization prompts refined for Ollama (concise, spoken-friendly output)
+- [x] Sanitized workflow exports committed to `infra/n8n/workflows/`
+- [x] Fallback behavior: unknown intent → helpful response listing what Xavi can do
 
 **Definition of done:** "what's on my plate today?" and "check my email" both work end-to-end via curl.
+
+Both workflows are built, reviewed and imported, but stay unchecked until they answer with real data. Three things they still wait on, none of them code: the host's Ollama listens on `127.0.0.1` only, so the containers cannot summarize (`OLLAMA_HOST`); the Google Calendar and Gmail credentials must be created and attached in the n8n editor; and the workflows are imported deactivated. See the closing notes in [FEAT-002](features/FEAT-002-todays-agenda-skill.md) and [FEAT-003](features/FEAT-003-email-review-skill.md).
 
 ## Phase 3 — iOS app
 
