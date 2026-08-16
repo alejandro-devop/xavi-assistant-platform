@@ -14,11 +14,17 @@ than no map.
 
 ## Where it runs
 
-| Service                | Address                                       | Who starts it                                    |
-| ---------------------- | --------------------------------------------- | ------------------------------------------------ |
-| n8n (xavi's own)       | `http://localhost:5679` (healthz: `/healthz`) | the user, via `cd infra && docker compose up -d` |
-| Ollama (host-native)   | `http://localhost:11434`                      | the user (systemd service)                       |
-| Gateway (Phase 1, TBD) | `http://localhost:8787` — does not exist yet  | —                                                |
+| Service              | Address                                                      | Who starts it                                     |
+| -------------------- | ------------------------------------------------------------ | ------------------------------------------------- |
+| n8n (xavi's own)     | `http://localhost:5679` (healthz: `/healthz`)                | the user, via `cd infra && docker compose up -d`  |
+| Ollama (host-native) | `http://localhost:11434`                                     | the user (systemd service)                        |
+| Gateway (Phase 1)    | `http://127.0.0.1:8787` (healthz: `/healthz`, no auth)       | the user, `pnpm --filter @xavi/gateway start`     |
+| Cloudflare Tunnel    | `api.<domain>` → gateway, `n8n.<domain>` → editor via Access | the user, `cloudflared tunnel run xavi-assistant` |
+
+The tunnel is locally managed: its config lives in `~/.cloudflared/config.yml`
+(untracked) and its credentials next to it, so no token is needed. `api` is
+public on purpose — the bearer token is its door; `n8n` sits behind a
+Cloudflare Access policy and 302s anyone unauthenticated to a login.
 
 **Agents never start or stop anything.** If something is down: say so in the
 report and continue with whatever doesn't depend on it.
@@ -47,16 +53,18 @@ it's a browser tab, it starts no server.
 
 ## Routes or screens
 
-- `http://localhost:5679` — n8n editor. **No owner account exists yet** (first
-  visit creates it); until the user does that, the editor shows the setup
-  screen. Do not create the account — that's the user's.
-- No other UI exists yet. The gateway and the iOS app arrive in Phases 1 and 3.
+- `http://localhost:5679` — n8n editor, owner account created 2026-08-16.
+  Credentials are the user's; agents never log in.
+- `http://127.0.0.1:8787/healthz` — the gateway's only unauthenticated route.
+  Everything else needs `Authorization: Bearer <GATEWAY_BEARER_TOKEN>`, read
+  from `apps/gateway/.env` (untracked). Never print that value into a report.
+- No UI yet beyond n8n's editor; the iOS app arrives in Phase 3.
 
 ## Areas
 
 Valid values for a dossier's `area:` field:
 
-- `gateway` — `apps/gateway` (Phase 1, not created yet)
+- `gateway` — `apps/gateway`
 - `shared` — `packages/shared`
 - `ios` — `apps/ios` (Phase 3, not created yet)
 - `infra` — `infra/` (docker compose, n8n workflows, tunnel, probe)
@@ -64,19 +72,29 @@ Valid values for a dossier's `area:` field:
 
 ## Checks that exist
 
-| What   | Command                                       |
-| ------ | --------------------------------------------- |
-| Types  | `pnpm typecheck`                              |
-| Linter | `pnpm lint`                                   |
-| Format | `pnpm format`                                 |
-| Tests  | none yet (arrive with the gateway in Phase 1) |
+| What   | Command          |
+| ------ | ---------------- |
+| Types  | `pnpm typecheck` |
+| Linter | `pnpm lint`      |
+| Format | `pnpm format`    |
+| Tests  | `pnpm test`      |
 
-All three run in seconds and are safe. CI runs them plus gitleaks on push.
+`pnpm test` runs Vitest through turbo, which builds `@xavi/shared` first. Two
+traps: a green suite does NOT mean `apps/gateway/dist` is current (run
+`pnpm build` before `pnpm start`), and `pnpm test -- --force` forwards the flag
+to Vitest, not turbo — use `npx turbo run test --force` to bypass the cache.
+
+All four run in seconds and are safe. CI runs them plus gitleaks on push.
 
 ## Live patterns
 
-None yet — the first gateway feature will set them. When it exists, the
-reference implementation for services lives in `apps/gateway`.
+`apps/gateway` is the reference implementation for services: config read from
+the environment at boot (`src/config.ts`), auth as an `onRequest` hook so 401
+beats schema validation, skills declared in a typed registry with their own
+dispatch budget (`src/skills.ts`), colocated `*.test.ts`. n8n workflows follow
+`infra/n8n/workflows/agenda.json`: deterministic formatting first, LLM
+summarization on top, and a fallback to the deterministic text whenever the
+model fails — the reply is never worse than the data behind it.
 
 ## Project graph
 
@@ -97,6 +115,13 @@ reference implementation for services lives in `apps/gateway`.
   containerized `ai_ollama` from the other stack (not ours, no published
   ports). Always use `localhost:11434`; from inside n8n use
   `http://host.docker.internal:11434`.
+- **Anything bound to `127.0.0.1` is unreachable from a container**, even via
+  `host.docker.internal` — the request arrives from the bridge (172.17.0.1) and
+  is refused. This bit twice: n8n cannot call the host's Ollama until its unit
+  sets `OLLAMA_HOST` to an address the bridge can reach (still pending, so the
+  agenda/email workflows cannot summarize), and cloudflared could not reach the
+  gateway until its compose service moved to `network_mode: host`. Before
+  blaming a workflow, check what the origin is bound to (`ss -tln`).
 - Secrets live only in `infra/.env` (gitignored). The repo is public: never
   write a real hostname token or credential into a tracked file — gitleaks runs
   in CI and there's a pre-commit hook (`.githooks/`).
@@ -108,5 +133,6 @@ reference implementation for services lives in `apps/gateway`.
 ```
 
 Answers everything above at once (services up/down with down-vs-busy
-distinction, ping webhook round trip, available models, repo state). Verified
-working on 2026-08-15.
+distinction, whether n8n can actually reach Ollama, whether the tunnel is up,
+ping webhook round trip, available models, repo state). Verified working on
+2026-08-16.

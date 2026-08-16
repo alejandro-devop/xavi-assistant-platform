@@ -18,6 +18,20 @@ check() {
 
 check "n8n (xavi)   " "http://localhost:5679/healthz"
 check "ollama native" "http://localhost:11434/api/tags"
+check "gateway      " "http://127.0.0.1:8787/healthz"
+
+# Can a container reach the host's Ollama? Bound to 127.0.0.1 it cannot, and
+# the summarizing workflows fail with no clue why. Skipped when n8n is down.
+printf 'ollama <- n8n : '
+docker exec xavi-assistant-n8n-1 wget -qO- -T 3 \
+  http://host.docker.internal:11434/api/tags >/dev/null 2>&1 &&
+  echo "reachable" ||
+  echo "UNREACHABLE — workflows cannot summarize (see OLLAMA_HOST in ENVIRONMENT.md)"
+
+printf 'tunnel        : '
+pgrep -f "cloudflared tunnel run xavi-assistant" >/dev/null &&
+  echo "running (api.<domain> + n8n.<domain>)" ||
+  echo "not running — only localhost answers"
 
 printf 'ping webhook  : '
 curl -s -X POST "http://localhost:5679/webhook/ping" \
