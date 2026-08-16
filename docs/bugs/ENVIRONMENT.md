@@ -117,11 +117,13 @@ model fails — the reply is never worse than the data behind it.
   `http://host.docker.internal:11434`.
 - **Anything bound to `127.0.0.1` is unreachable from a container**, even via
   `host.docker.internal` — the request arrives from the bridge (172.17.0.1) and
-  is refused. This bit twice: n8n cannot call the host's Ollama until its unit
-  sets `OLLAMA_HOST` to an address the bridge can reach (still pending, so the
-  agenda/email workflows cannot summarize), and cloudflared could not reach the
-  gateway until its compose service moved to `network_mode: host`. Before
-  blaming a workflow, check what the origin is bound to (`ss -tln`).
+  is refused. This bit twice: n8n could not call the host's Ollama until a
+  systemd drop-in set `OLLAMA_HOST=0.0.0.0:11434` (done 2026-08-16 — a real
+  inference from inside the container now takes ~6 s warm), and cloudflared
+  could not reach the gateway until its compose service moved to
+  `network_mode: host`. Before blaming a workflow, check what the origin is
+  bound to (`ss -tln`), and note this host runs no firewall: Ollama is now
+  reachable from the LAN.
 - Secrets live only in `infra/.env` (gitignored). The repo is public: never
   write a real hostname token or credential into a tracked file — gitleaks runs
   in CI and there's a pre-commit hook (`.githooks/`).
