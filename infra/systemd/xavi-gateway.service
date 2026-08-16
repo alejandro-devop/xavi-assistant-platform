@@ -1,0 +1,19 @@
+; Systemd *user* unit — no root needed. Copy to ~/.config/systemd/user/,
+; replacing <user> and the node path with your own (`command -v node`).
+; See infra/README.md, "Keeping it running".
+
+[Unit]
+Description=Xavi Assistant gateway (Fastify on 127.0.0.1:8787)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/<user>/Developer/xavi-assistant/apps/gateway
+; Runs the compiled dist/, so `pnpm build` must have run after any code change.
+ExecStart=/home/<user>/.nvm/versions/node/v22.14.0/bin/node --env-file=.env dist/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,17 @@
+; Systemd *user* unit for a locally-managed tunnel — no root, no token: the
+; ingress rules and credentials come from ~/.cloudflared/config.yml.
+; Copy to ~/.config/systemd/user/, replacing <user>.
+
+[Unit]
+Description=Cloudflare Tunnel for Xavi Assistant (api + n8n hostnames)
+After=network-online.target xavi-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/<user>/.local/bin/cloudflared --no-autoupdate tunnel run xavi-assistant
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

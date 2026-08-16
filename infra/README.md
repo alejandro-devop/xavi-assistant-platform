@@ -139,6 +139,28 @@ pnpm, this repo and two gitignored env files (`infra/.env`,
    the reply degrades to a static bilingual fallback) but language mirroring
    may suffer.
 
+## Keeping it running
+
+The gateway and the tunnel are the two pieces that must outlive a terminal
+(the iOS app in Phase 3 talks to them from outside the house). Both run as
+**systemd user units** — no root anywhere:
+
+```bash
+loginctl enable-linger $USER   # user services start at boot, survive logout
+```
+
+```bash
+cp infra/systemd/*.service ~/.config/systemd/user/   # then edit the paths
+```
+
+```bash
+systemctl --user enable --now xavi-gateway xavi-cloudflared
+```
+
+`systemctl --user status xavi-gateway` and `journalctl --user -u xavi-gateway -f`
+are how you read them afterwards. Remember the units run `dist/`: after
+changing gateway code, `pnpm build && systemctl --user restart xavi-gateway`.
+
 ## What runs where
 
 | Piece             | Address                                   | Public?                              |
