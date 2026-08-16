@@ -1,0 +1,110 @@
+{
+  "id": "XaviAgenda000001",
+  "name": "agenda",
+  "active": true,
+  "settings": {},
+  "nodes": [
+    {
+      "id": "a3d9c2e0-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "a3d9c2e0-0000-4000-8000-00000000000a",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agenda",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "a3d9c2e0-0000-4000-8000-000000000002",
+      "name": "Get Today's Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [220, 0],
+      "alwaysOutputData": true,
+      "notes": "Google Calendar OAuth2 credential is attached by the user in the n8n editor and lives ONLY in n8n's credential store (ADR-0004) — it is never part of this export. alwaysOutputData keeps the workflow running on a zero-event day (one empty item) so the formatter can answer pleasantly. $now uses the instance timezone (GENERIC_TIMEZONE), so 'today' is the user's today.",
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": "primary",
+          "cachedResultName": "Primary calendar"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $now.startOf('day') }}",
+        "timeMax": "={{ $now.endOf('day') }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a3d9c2e0-0000-4000-8000-000000000003",
+      "name": "Format Rundown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "jsCode": "// Deterministic time-ordered rundown of today's events (FEAT-002). Since slice 2\n// this text is both the LLM's input and the fallback reply if Ollama fails —\n// the webhook never answers worse than slice 1 did.\n// Relies on the Calendar node's alwaysOutputData: a zero-event day still emits one empty\n// item, so this node runs and can answer pleasantly instead of the workflow going silent.\nconst WORD_BUDGET = 120; // the reply will be spoken aloud in Phase 4\nconst MAX_LISTED = 8;\nconst words = (s) => s.trim().split(/\\s+/).length;\nconst cut = (s, max) => {\n  const parts = String(s).trim().split(/\\s+/);\n  return parts.length <= max ? parts.join(' ') : parts.slice(0, max).join(' ') + '…';\n};\nconst events = $input\n  .all()\n  .map((item) => item.json)\n  .filter((e) => e && typeof e === 'object' && e.start && (e.start.dateTime || e.start.date));\n// Sort by start ourselves — deterministic, no reliance on the API's ordering options.\nconst startKey = (e) => e.start.dateTime ?? `${e.start.date}T00:00`;\nevents.sort((a, b) => startKey(a).localeCompare(startKey(b)));\nconst clock = (iso) => iso.slice(11, 16); // HH:MM straight from the calendar's local-offset ISO string\nconst range = (e) =>\n  e.start.dateTime\n    ? `${clock(e.start.dateTime)}-${clock((e.end && e.end.dateTime) || e.start.dateTime)}`\n    : 'all day';\nconst place = (e) => {\n  const p = (typeof e.location === 'string' && e.location.trim()) || e.hangoutLink || '';\n  return p ? ` @ ${cut(p, 6)}` : '';\n};\nconst date = $now.toFormat('yyyy-MM-dd');\nconst line = (e) => `- ${range(e)}: ${cut(e.summary || '(untitled)', 12)}${place(e)}`;\nconst build = (listed) => {\n  const lines = events.slice(0, listed).map(line);\n  const extra = events.length - listed;\n  if (extra > 0) lines.push(`…plus ${extra} more / …y ${extra} más`);\n  const n = events.length;\n  return `Today (${date}) you have ${n} event${n === 1 ? '' : 's'} / Hoy tienes ${n} evento${n === 1 ? '' : 's'}:\\n${lines.join('\\n')}`;\n};\nlet reply;\nif (events.length === 0) {\n  reply =\n    'Your calendar is clear today — nothing scheduled. Enjoy! / Hoy no tienes nada en el calendario. ¡Disfruta!';\n} else {\n  let listed = Math.min(events.length, MAX_LISTED);\n  reply = build(listed);\n  while (listed > 1 && words(reply) > WORD_BUDGET) {\n    listed -= 1;\n    reply = build(listed);\n  }\n}\nreturn [{ json: { ok: true, reply, eventCount: events.length, date } }];"
+      }
+    },
+    {
+      "id": "a3d9c2e0-0000-4000-8000-000000000004",
+      "name": "Build Summary Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "jsCode": "// Build the Ollama request (FEAT-002 slice 2). The user's original command\n// arrives in the webhook body (the gateway's SkillRequest.text) and drives the\n// reply language — the prompt states the mirroring rule explicitly (settled\n// decision in the dossier), in the numbered-requirements + bilingual-clause\n// shape FEAT-001 tuned live on qwen2.5:7b (apps/gateway/src/intent.ts,\n// buildUnknownReplyPrompt): a plain one-line 'same language' rule was NOT\n// enough — the bilingual rundown text dragged English questions into Spanish\n// replies until the prompt took this shape. The deterministic rundown from the\n// previous node is both the LLM's input and the fallback reply carried forward\n// for the finalize node, so an Ollama failure degrades to slice 1's answer,\n// never to an error.\nconst MODEL = 'qwen2.5:7b'; // the instance's pulled model (infra/README.md); prompt tuned on it\nconst rundown = $('Format Rundown').first().json;\nlet userText = '';\nconst hook = $('Webhook').first().json;\nif (hook && hook.body && typeof hook.body.text === 'string') {\n  userText = hook.body.text.trim().slice(0, 300);\n}\nconst languageRule = userText\n  ? 'Written in the SAME LANGUAGE as the user\\'s message: if the user wrote in English, answer in English; si el usuario escribió en español, responde en español. The calendar lines above are bilingual — ignore their language, mirror the USER.'\n  : 'Written in English.';\nconst question = userText || 'What is on my calendar today?';\nconst prompt = [\n  'You are Xavi, a personal assistant.',\n  'The user asked about today\\'s calendar.',\n  `User's message: \"${question}\"`,\n  `Calendar for ${rundown.date} (${rundown.eventCount} event(s), already in time order; each line is bilingual English/Spanish):`,\n  rundown.reply,\n  'Write the answer you would speak aloud, following ALL of these requirements:',\n  `1. ${languageRule}`,\n  '2. One short spoken paragraph — no markdown, no bullet points, no preamble, no sign-off.',\n  '3. Name EVERY event from the list above, in the same order, each with its time range and its location or link when it has one. Do not invent events or details that are not in the list.',\n  '4. Under 100 words. If that is impossible, prioritize the earliest events and say how many more there are.',\n  '5. If the calendar is empty, just say so pleasantly.',\n  'Plain text only — no JSON, no markdown.',\n].join('\\n');\nreturn [\n  {\n    json: {\n      ollamaBody: {\n        model: MODEL,\n        prompt,\n        stream: false,\n        options: { temperature: 0.1, num_predict: 220 },\n      },\n      fallbackReply: rundown.reply,\n      eventCount: rundown.eventCount,\n      date: rundown.date,\n    },\n  },\n];"
+      }
+    },
+    {
+      "id": "a3d9c2e0-0000-4000-8000-000000000005",
+      "name": "Summarize with Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "onError": "continueRegularOutput",
+      "notes": "Local summarization (ADR-0004: calendar data never leaves the machine). host.docker.internal:11434 is the settled address for Ollama from inside n8n — it requires the host's Ollama to listen on a container-reachable interface (OLLAMA_HOST), not only 127.0.0.1. onError: continueRegularOutput means a down/slow Ollama flows an error item to Finalize Reply, which falls back to the deterministic rundown instead of failing the webhook.",
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.ollamaBody) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "a3d9c2e0-0000-4000-8000-000000000006",
+      "name": "Finalize Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "parameters": {
+        "jsCode": "// Fold Ollama's answer into the AgendaSkillResult shape, guarding the word\n// budget deterministically (FEAT-002 slice 2): an HTTP error item (the\n// previous node's onError: continueRegularOutput), an empty answer, or one\n// blowing past the budget all fall back to the deterministic rundown (≤120\n// words by construction) — the webhook always answers ok: true with a\n// non-empty reply, the pleasant empty-day line included. `summarized` says\n// which path answered, for debugging and the reviewer.\nconst WORD_CAP = 130; // grace over the ~120 target; the fallback is ≤120 by construction\nconst base = $('Build Summary Prompt').first().json;\nconst words = (s) => s.trim().split(/\\s+/).length;\nconst raw = $input.first().json;\nlet text = raw && typeof raw.response === 'string' ? raw.response.trim() : '';\nif (text.startsWith('\"') && text.endsWith('\"') && text.length > 1) {\n  text = text.slice(1, -1).trim();\n}\nconst summarized = text !== '' && words(text) <= WORD_CAP;\nconst reply = summarized ? text : base.fallbackReply;\nreturn [\n  {\n    json: {\n      ok: true,\n      reply,\n      eventCount: base.eventCount,\n      date: base.date,\n      summarized,\n    },\n  },\n];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Get Today's Events", "type": "main", "index": 0 }]]
+    },
+    "Get Today's Events": {
+      "main": [[{ "node": "Format Rundown", "type": "main", "index": 0 }]]
+    },
+    "Format Rundown": {
+      "main": [[{ "node": "Build Summary Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build Summary Prompt": {
+      "main": [[{ "node": "Summarize with Ollama", "type": "main", "index": 0 }]]
+    },
+    "Summarize with Ollama": {
+      "main": [[{ "node": "Finalize Reply", "type": "main", "index": 0 }]]
+    }
+  }
+}

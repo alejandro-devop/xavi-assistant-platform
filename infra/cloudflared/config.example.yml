@@ -7,8 +7,11 @@ credentials-file: /home/<user>/.cloudflared/<TUNNEL_ID>.json
 
 ingress:
   # n8n editor — must also be protected with Cloudflare Access (email OTP).
+  # 5679 on purpose: that is the host port compose publishes for xavi's n8n
+  # (5678 on this host belongs to an unrelated stack). Only the containerized
+  # cloudflared in docker-compose.yml uses http://n8n:5678 (container port).
   - hostname: n8n.<your-domain>
-    service: http://localhost:5678
+    service: http://localhost:5679
   # Gateway API (Phase 1) — authenticates with its own bearer token.
   - hostname: api.<your-domain>
     service: http://localhost:8787

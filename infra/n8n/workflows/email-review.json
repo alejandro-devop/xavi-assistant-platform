@@ -1,0 +1,148 @@
+{
+  "id": "XaviEmailRev0001",
+  "name": "email-review",
+  "active": true,
+  "settings": {},
+  "nodes": [
+    {
+      "id": "b4e0d3f1-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "b4e0d3f1-0000-4000-8000-00000000000b",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-review",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "b4e0d3f1-0000-4000-8000-000000000002",
+      "name": "Get Unread Mail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [220, 0],
+      "alwaysOutputData": true,
+      "notes": "Gmail OAuth2 credential (read-only scope) is attached by the user in the n8n editor and lives ONLY in n8n's credential store (ADR-0004) — it is never part of this export. simple: true fetches metadata only (format=metadata with From/To/Cc/Bcc/Subject headers), never the message body — the dossier's privacy rule by construction. filters map to the Gmail query 'is:unread after:<epoch-24h>'; limit: 25 becomes maxResults=25 (first page only), so no more than the 25 most recent unread messages are ever pulled. alwaysOutputData keeps the workflow running on a zero-message window (one empty item) so the formatter can answer pleasantly.",
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 25,
+        "simple": true,
+        "filters": {
+          "readStatus": "unread",
+          "receivedAfter": "={{ $now.minus({ hours: 24 }) }}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b4e0d3f1-0000-4000-8000-000000000003",
+      "name": "Format Unread List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "jsCode": "// Deterministic chronological sender+subject list of unread mail from the last\n// 24 hours (FEAT-003). Since slice 2 this text is both the LLM's input and the\n// fallback reply if Ollama fails — the webhook never answers worse than slice 1.\n// PRIVACY (dossier rule): only the sender's display name/address and the\n// subject reach the reply; snippets/bodies stay inside n8n's own execution\n// data and are never echoed to any other log destination by this workflow.\n// Relies on the Gmail node's alwaysOutputData: a zero-message window still\n// emits one empty item, so this node runs and can answer pleasantly.\nconst CAP = 25; // the Gmail node's limit; enforced here too, defensively\nconst cut = (s, max) => {\n  const parts = String(s).trim().split(/\\s+/);\n  return parts.length <= max ? parts.join(' ') : parts.slice(0, max).join(' ') + '…';\n};\nconst messages = $input\n  .all()\n  .map((item) => item.json)\n  .filter((m) => m && typeof m === 'object' && m.id)\n  .slice(0, CAP);\n// simplifyOutput lifts payload headers to top level keeping the original\n// message's header casing — look them up case-insensitively.\nconst header = (m, name) => {\n  const key = Object.keys(m).find((k) => k.toLowerCase() === name);\n  return key !== undefined && typeof m[key] === 'string' ? m[key].trim() : '';\n};\n// 'Ana Pérez <ana@example.com>' -> 'Ana Pérez'; bare addresses pass through.\nconst sender = (m) => {\n  const from = header(m, 'from');\n  if (!from) return '(unknown sender)';\n  const match = from.match(/^\\s*\"?([^\"<]*?)\"?\\s*<[^>]+>\\s*$/);\n  const name = match ? match[1].trim() : '';\n  return cut(name || from.replace(/[<>]/g, '').trim(), 5);\n};\nconst subject = (m) => cut(header(m, 'subject') || '(no subject)', 10);\n// Chronological = oldest first; internalDate is ms-since-epoch as a string.\nconst ts = (m) => Number(m.internalDate) || 0;\nmessages.sort((a, b) => ts(a) - ts(b));\n// Times in the instance timezone (GENERIC_TIMEZONE), via Intl — no reliance\n// on the sandbox exposing Luxon's DateTime class.\nconst zone = $now.zoneName;\nconst today = $now.toFormat('yyyy-MM-dd');\nconst timeFmt = new Intl.DateTimeFormat('en-GB', {\n  timeZone: zone,\n  hour: '2-digit',\n  minute: '2-digit',\n  hourCycle: 'h23',\n});\nconst dayFmt = new Intl.DateTimeFormat('en-CA', {\n  timeZone: zone,\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit',\n});\nconst stamp = (m) => {\n  const ms = ts(m);\n  if (!ms) return '??:??';\n  const d = new Date(ms);\n  const day = dayFmt.format(d);\n  return day === today ? timeFmt.format(d) : `${day.slice(5)} ${timeFmt.format(d)}`;\n};\nconst messageCount = messages.length;\nconst capReached = messageCount >= CAP;\nlet reply;\nif (messageCount === 0) {\n  reply =\n    'Your inbox is clear — no unread email in the last 24 hours. Enjoy! / Bandeja limpia: no tienes correos sin leer en las últimas 24 horas. ¡Disfruta!';\n} else {\n  const lines = messages.map((m) => `- ${stamp(m)}: ${sender(m)} — ${subject(m)}`);\n  if (capReached) {\n    lines.push(\n      '…there may be more; only the 25 most recent are listed / …puede haber más; solo se listan los 25 más recientes',\n    );\n  }\n  reply = `You have ${messageCount} unread email${messageCount === 1 ? '' : 's'} from the last 24 hours / Tienes ${messageCount} correo${messageCount === 1 ? '' : 's'} sin leer de las últimas 24 horas:\\n${lines.join('\\n')}`;\n}\nreturn [{ json: { ok: true, reply, messageCount, capReached } }];"
+      }
+    },
+    {
+      "id": "b4e0d3f1-0000-4000-8000-000000000004",
+      "name": "Build Summary Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "jsCode": "// Build the Ollama request (FEAT-003 slice 2). The user's original command\n// arrives in the webhook body (the gateway's SkillRequest.text) and drives the\n// reply language — the prompt states the mirroring rule explicitly (settled\n// decision in the dossier), in the numbered-requirements + bilingual-clause\n// shape FEAT-001 tuned live on qwen2.5:7b and FEAT-002 re-proved for agenda.\n// Tuned live for THIS skill (2026-08-15), three findings, all evidence in the\n// dossier: (a) a Spanish user got an English reply until the mirroring rule\n// was restated at the end (mixed-language subjects drag harder than agenda's\n// data); (b) the model missed/invented GROUP COUNTS whenever it had to count\n// list lines itself (\"three\" for a 23-newsletter pile, then \"9/16\" for 2/23),\n// so grouping is now done HERE, deterministically — repeated senders are\n// collapsed in code with their exact count and a sample subject, and the\n// model only phrases, prioritizes and translates; (c) temperature 0 (greedy),\n// not agenda's 0.1, because 0.1 measurably flip-flopped prioritization order\n// between identical runs on busy inboxes.\n// Grouping heuristic (the judgment call section 1 leaves to the builder):\n// same sender display name appearing >= 2 times in the window — newsletters\n// and notification bots repeat under one name; two humans rarely do in 24h,\n// and if they do, collapsing to \"name, N messages + sample\" is still honest.\n// The deterministic list from the previous node is both the LLM's input and\n// the fallback reply carried forward for the finalize node, so an Ollama\n// failure degrades to slice 1's answer, never to an error.\n// PRIVACY (dossier rule): the prompt carries only what Format Unread List\n// emitted — sender display names and subjects. No snippet, no body text ever\n// reaches the prompt or the reply surface; and Ollama is local anyway.\nconst MODEL = 'qwen2.5:7b'; // the instance's pulled model (infra/README.md); prompt tuned on it\nconst listing = $('Format Unread List').first().json;\nlet userText = '';\nconst hook = $('Webhook').first().json;\nif (hook && hook.body && typeof hook.body.text === 'string') {\n  userText = hook.body.text.trim().slice(0, 300);\n}\nconst languageRule = userText\n  ? `Written in the SAME LANGUAGE as the user's message (\"${userText}\"): if the user wrote in English, answer in English; si el usuario escribió en español, responde en español. Subjects in the list may be in other languages — ignore them, mirror the USER's message only.`\n  : 'Written in English.';\nconst question = userText || 'Do I have any new email?';\n// Deterministic pre-grouping: parse the slice-1 lines (\"- time: sender —\n// subject\"), collapse senders appearing >= 2 times into one entry with the\n// exact count and a sample subject. The model must never count anything.\nconst parsed = [];\nfor (const line of listing.reply.split('\\n')) {\n  const m = line.match(/^- (.+?): (.+?) — (.+)$/);\n  if (m) parsed.push({ sender: m[2], subject: m[3] });\n}\nconst bySender = new Map();\nfor (const p of parsed) {\n  if (!bySender.has(p.sender)) bySender.set(p.sender, []);\n  bySender.get(p.sender).push(p.subject);\n}\nconst individual = [];\nconst grouped = [];\nfor (const [sender, subjects] of bySender) {\n  if (subjects.length === 1) {\n    individual.push(`- ${sender} — ${subjects[0]}`);\n  } else {\n    grouped.push(`- ${sender}: ${subjects.length} messages (first subject: \"${subjects[0]}\")`);\n  }\n}\nconst mailBlock =\n  listing.messageCount === 0\n    ? '(no unread mail in the last 24 hours)'\n    : [\n        `Individual messages (${individual.length}), oldest first — you only see sender and subject, never message bodies:`,\n        ...(individual.length > 0 ? individual : ['(none)']),\n        'Repeated senders, already grouped and counted:',\n        ...(grouped.length > 0 ? grouped : ['(none)']),\n      ].join('\\n');\nconst capClause = listing.capReached\n  ? ' FINALLY, close by saying there may be more mail — only the 25 most recent unread messages are covered.'\n  : '';\nconst requirements = [\n  `1. ${languageRule}`,\n  '2. One short spoken answer — plain text, no markdown, no bullet points, no preamble, no sign-off.',\n  '3. Structure the answer in THIS exact order: FIRST the individual messages that likely need the user to act (a person writing directly, a question, a deadline, an invoice, anything urgent in the subject) — say they need action. THEN everything else as FYIs: the remaining individual messages and ALL the repeated-sender groups (newsletters, promotions, notification bots always go in this second part, never first).' +\n    capClause,\n  '4. Name EVERY individual message (sender plus a short gist from its subject) and mention EVERY repeated-sender group exactly once, repeating its given count verbatim. Do not drop any entry, do not invent counts or content you cannot see, and never quote message bodies — you do not have them.',\n  '5. Be concise — even on a busy inbox, stay under about 200 words.',\n  '6. If there is no unread mail, just say so pleasantly in ONE sentence, in the language requirement 1 demands — never in two languages.',\n];\nconst prompt = [\n  'You are Xavi, a personal assistant.',\n  'The user asked about their unread email.',\n  `User's message: \"${question}\"`,\n  `Unread mail from the last 24 hours: ${listing.messageCount} message(s).`,\n  mailBlock,\n  'Write the answer you would speak aloud, following ALL of these requirements:',\n  ...requirements,\n  \"Remember requirement 1: the answer must be in the same language as the user's message.\",\n  'Plain text only — no JSON, no markdown.',\n].join('\\n');\nreturn [\n  {\n    json: {\n      ollamaBody: {\n        model: MODEL,\n        prompt,\n        stream: false,\n        // temperature 0 (greedy decoding) — see tuning note above.\n        options: { temperature: 0, num_predict: 500 },\n      },\n      fallbackReply: listing.reply,\n      messageCount: listing.messageCount,\n      capReached: listing.capReached,\n    },\n  },\n];"
+      }
+    },
+    {
+      "id": "b4e0d3f1-0000-4000-8000-000000000005",
+      "name": "Summarize with Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "onError": "continueRegularOutput",
+      "notes": "Local prioritization/summarization (dossier privacy rule: email data never leaves the machine — Ollama is local). host.docker.internal:11434 is the settled address for Ollama from inside n8n — it requires the host's Ollama to listen on a container-reachable interface (OLLAMA_HOST), not only 127.0.0.1 (user-gated fix, FEAT-002 dossier). onError: continueRegularOutput means a down/slow Ollama flows an error item to Finalize Reply, which falls back to the deterministic slice-1 list instead of failing the webhook. The 75s node timeout sits inside the gateway's 90s email_review dispatch budget (FEAT-004), leaving room for the Gmail fetch and overhead.",
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.ollamaBody) }}",
+        "options": {
+          "timeout": 75000
+        }
+      }
+    },
+    {
+      "id": "b4e0d3f1-0000-4000-8000-000000000006",
+      "name": "Finalize Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "parameters": {
+        "jsCode": "// Fold Ollama's answer into the EmailReviewSkillResult shape (FEAT-003\n// slice 2): an HTTP error item (the previous node's onError:\n// continueRegularOutput), an empty answer, or a runaway one all fall back to\n// the deterministic slice-1 list — the webhook always answers ok: true with a\n// non-empty reply, the pleasant empty-inbox line included. `summarized` says\n// which path answered, for debugging and the reviewer.\n// WORD_CAP is a runaway-generation guard, NOT a style budget — section 1\n// explicitly declines a fixed word cap for this skill (unlike agenda's ~120);\n// the prompt asks for ~200 words, this only catches the model going haywire.\nconst WORD_CAP = 350;\nconst base = $('Build Summary Prompt').first().json;\nconst words = (s) => s.trim().split(/\\s+/).length;\nconst raw = $input.first().json;\nlet text = raw && typeof raw.response === 'string' ? raw.response.trim() : '';\nif (text.startsWith('\"') && text.endsWith('\"') && text.length > 1) {\n  text = text.slice(1, -1).trim();\n}\nconst summarized = text !== '' && words(text) <= WORD_CAP;\nconst reply = summarized ? text : base.fallbackReply;\nreturn [\n  {\n    json: {\n      ok: true,\n      reply,\n      messageCount: base.messageCount,\n      capReached: base.capReached,\n      summarized,\n    },\n  },\n];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Unread Mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unread Mail": {
+      "main": [
+        [
+          {
+            "node": "Format Unread List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Unread List": {
+      "main": [
+        [
+          {
+            "node": "Build Summary Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Summary Prompt": {
+      "main": [
+        [
+          {
+            "node": "Summarize with Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize with Ollama": {
+      "main": [
+        [
+          {
+            "node": "Finalize Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

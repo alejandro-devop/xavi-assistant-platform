@@ -1,9 +1,11 @@
 # Infrastructure
 
-Everything runs on a single Linux host. Ollama runs natively (ADR-0004); n8n and
-the Cloudflare Tunnel run in Docker via [docker-compose.yml](docker-compose.yml);
-the only public entrance is the tunnel. A fresh machine needs Docker, Ollama,
-Node ≥ 22 + pnpm, this repo and an `infra/.env` — nothing else.
+Everything runs on a single Linux host. Ollama runs natively (ADR-0004); the
+gateway (`apps/gateway`) runs natively too; n8n and the Cloudflare Tunnel run
+in Docker via [docker-compose.yml](docker-compose.yml); the only public
+entrance is the tunnel. A fresh machine needs Docker, Ollama, Node ≥ 22 +
+pnpm, this repo and two gitignored env files (`infra/.env`,
+`apps/gateway/.env`) — nothing else.
 
 ## Prerequisites
 
@@ -67,6 +69,49 @@ Node ≥ 22 + pnpm, this repo and an `infra/.env` — nothing else.
    add `n8n.<domain>`, with a policy allowing only your email (One-time PIN is
    enough). The gateway hostname does NOT go behind Access — it authenticates
    with its own bearer token so the iOS app can reach it.
+
+6. **Gateway** (the Phase 1 "brain", `apps/gateway`) — from the repo root:
+
+   ```bash
+   pnpm install
+   pnpm build   # ALWAYS build before starting: `start` runs the compiled
+                # dist/, and green tests do NOT prove dist/ is fresh
+   cp apps/gateway/.env.example apps/gateway/.env
+   openssl rand -hex 32   # paste the output into apps/gateway/.env
+                          # as GATEWAY_BEARER_TOKEN — never into a tracked file
+   pnpm --filter @xavi/gateway start   # node --env-file=.env dist/server.js
+   ```
+
+   The server binds `127.0.0.1:8787`; the tunnel is its only public entrance.
+   Check it locally first:
+
+   ```bash
+   curl http://localhost:8787/healthz
+   curl -X POST http://localhost:8787/command \
+     -H "Authorization: Bearer <your token>" \
+     -H 'content-type: application/json' \
+     -d '{"text":"ping, are you alive?"}'
+   # → {"ok":true,"intent":"ping","reply":"pong","skillResult":{...}}
+   ```
+
+   Then, with the tunnel up (step 4) and `api.<domain>` routed to
+   `http://host.docker.internal:8787`, run the same command from outside the
+   network — this is Phase 1's definition of done:
+
+   ```bash
+   curl -X POST https://api.<domain>/command \
+     -H "Authorization: Bearer <your token>" \
+     -H 'content-type: application/json' \
+     -d '{"text":"hazme un ping"}'
+   ```
+
+   Latency to expect: the first command after idle can take ~20–40 s while
+   Ollama loads the model, and a command the gateway cannot classify makes up
+   to two LLM calls (30 s cap each) — worst case ~60 s cold. Give your client
+   a generous timeout before concluding it hangs. Prompts are tuned on
+   `qwen2.5:7b`; switching `OLLAMA_MODEL` keeps the JSON contract (worst case
+   the reply degrades to a static bilingual fallback) but language mirroring
+   may suffer.
 
 ## What runs where
 
