@@ -81,7 +81,9 @@ it), multi-user auth, iOS anything.
 
 - **Cloudflare Tunnel**: needs the user's domain and `TUNNEL_TOKEN` in
   `infra/.env`, plus the dashboard hostname `api.<domain>` →
-  `http://host.docker.internal:8787`. Agents write config/docs but the user
+  `http://localhost:8787` (`cloudflared` runs with `network_mode: host`
+  because the gateway binds `127.0.0.1` and the docker bridge cannot reach
+  it — verified 2026-08-16). Agents write config/docs but the user
   brings the tunnel up. This is also the **hard precondition for Phase 3** —
   the iOS app only talks to the gateway through this hostname.
 - Generating the real `GATEWAY_BEARER_TOKEN` value (agents document

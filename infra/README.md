@@ -45,30 +45,49 @@ pnpm, this repo and two gitignored env files (`infra/.env`,
    The gateway (Phase 1) talks to it on `localhost:11434`; n8n workflows reach
    it at `http://host.docker.internal:11434`.
 
-4. **Cloudflare Tunnel** (needs a domain on Cloudflare): in the Zero Trust
-   dashboard, Networks → Tunnels → create a tunnel, copy its token into
-   `infra/.env` as `TUNNEL_TOKEN`, and add the public hostnames:
+4. **Cloudflare Tunnel** — the only public entrance. It needs a domain whose
+   nameservers point at Cloudflare (adding the domain in the dashboard prints
+   the two to set at your registrar; the domain must read **Active** before
+   any hostname resolves). Then, from scratch:
 
-   | Hostname       | Service                                      |
-   | -------------- | -------------------------------------------- |
-   | `n8n.<domain>` | `http://n8n:5678`                            |
-   | `api.<domain>` | `http://host.docker.internal:8787` (Phase 1) |
+   1. Dashboard → **Zero Trust** (first visit asks for a team name and a
+      plan — Free is enough) → **Networks → Tunnels → Create a tunnel** →
+      type **Cloudflared** → name it `xavi-assistant`.
+   2. The install screen shows a command containing a long `--token eyJhIjoi…`.
+      Ignore the command — compose runs cloudflared for you. Copy the token
+      alone into `infra/.env` as `TUNNEL_TOKEN` (gitignored; never anywhere
+      else).
+   3. In the tunnel's **Public Hostname** tab, add both routes:
 
-   Then:
+      | Hostname       | Type | URL                        |
+      | -------------- | ---- | -------------------------- |
+      | `n8n.<domain>` | HTTP | `localhost:5679`           |
+      | `api.<domain>` | HTTP | `localhost:8787` (Phase 1) |
+
+      The DNS records are created for you. Both URLs are `localhost` because
+      the `cloudflared` service runs with `network_mode: host` — the gateway
+      binds `127.0.0.1`, which the docker bridge cannot reach.
 
    ```bash
    docker compose --profile tunnel up -d
    ```
+
+   `docker compose logs -f cloudflared` should reach the line about a
+   registered tunnel connection, and the dashboard should show it **HEALTHY**.
 
    (A locally-managed tunnel with `cloudflared tunnel create` + a config file
    works too — see [cloudflared/config.example.yml](cloudflared/config.example.yml) —
    but the token route is what the compose file automates.)
 
 5. **Cloudflare Access in front of n8n** (required — the editor holds OAuth
-   credentials for your email/calendar): Zero Trust → Access → Applications →
-   add `n8n.<domain>`, with a policy allowing only your email (One-time PIN is
-   enough). The gateway hostname does NOT go behind Access — it authenticates
-   with its own bearer token so the iOS app can reach it.
+   credentials for your email/calendar, and an unclaimed n8n lets anyone create
+   its owner account): Zero Trust → **Access controls** → Applications →
+   Create new application → Self-hosted and private → Add public hostname
+   `n8n.<domain>`, with a policy allowing only your email (One-time PIN is
+   enough). Until that policy exists, keep the hostname out of the tunnel's
+   ingress rather than serving it unprotected. The gateway hostname does NOT go
+   behind Access — it authenticates with its own bearer token so the iOS app
+   can reach it.
 
 6. **Gateway** (the Phase 1 "brain", `apps/gateway`) — from the repo root:
 
@@ -95,8 +114,8 @@ pnpm, this repo and two gitignored env files (`infra/.env`,
    ```
 
    Then, with the tunnel up (step 4) and `api.<domain>` routed to
-   `http://host.docker.internal:8787`, run the same command from outside the
-   network — this is Phase 1's definition of done:
+   `http://localhost:8787`, run the same command from outside the network —
+   this is Phase 1's definition of done:
 
    ```bash
    curl -X POST https://api.<domain>/command \
@@ -104,6 +123,13 @@ pnpm, this repo and two gitignored env files (`infra/.env`,
      -H 'content-type: application/json' \
      -d '{"text":"hazme un ping"}'
    ```
+
+   When that curl misbehaves: `502` means the gateway process isn't running
+   (or `cloudflared` lost `network_mode: host`); `530`/`1033` means the tunnel
+   itself isn't connected; a DNS failure means the domain isn't Active yet.
+   A one-time-PIN prompt on `n8n.<domain>` is Access working as intended —
+   `api.<domain>` must NOT be behind Access, since the iOS app cannot pass a
+   browser login and authenticates with its bearer token instead.
 
    Latency to expect: the first command after idle can take ~20–40 s while
    Ollama loads the model, and a command the gateway cannot classify makes up

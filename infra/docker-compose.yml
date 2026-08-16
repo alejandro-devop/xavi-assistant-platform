@@ -38,13 +38,20 @@ services:
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
+    # Host network on purpose: the gateway binds 127.0.0.1:8787 (settled in
+    # the Phase 1 spec), and a loopback-bound process refuses connections from
+    # the docker bridge — host.docker.internal:8787 answers "connection
+    # refused". Sharing the host's stack is what lets cloudflared reach it.
+    # Consequence: service names no longer resolve, so routes use the ports
+    # compose publishes on the host (same as cloudflared/config.example.yml).
+    network_mode: host
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     # No ports: cloudflared dials OUT to Cloudflare; nothing listens.
     # Route hostnames to services in the Cloudflare dashboard:
-    #   n8n.<domain> -> http://n8n:5678   (plus a Cloudflare Access policy!)
-    #   api.<domain> -> http://host.docker.internal:8787   (gateway, Phase 1)
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    #   n8n.<domain> -> http://localhost:5679   (plus a Cloudflare Access policy!)
+    #   api.<domain> -> http://localhost:8787   (gateway, Phase 1)
+    # The routing list is the security boundary on a shared host: keep it to
+    # these two and never add a catch-all rule.
 
 volumes:
   n8n_data:

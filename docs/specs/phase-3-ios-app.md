@@ -9,7 +9,7 @@
 a phone on cellular). The app has no business existing before its server is
 reachable. If this isn't true yet, stop and tell the user what's missing
 (tunnel token in `infra/.env`, dashboard hostname `api.<domain>` →
-`http://host.docker.internal:8787` — see `infra/README.md`).
+`http://localhost:8787` — see `infra/README.md`).
 
 **Where this phase runs:** the app is built with Xcode on the user's Mac —
 the repo is cloned there and the chain runs in a Claude Code session on that
