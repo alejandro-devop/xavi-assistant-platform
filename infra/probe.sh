@@ -28,8 +28,10 @@ docker exec xavi-assistant-n8n-1 wget -qO- -T 3 \
   echo "reachable" ||
   echo "UNREACHABLE — workflows cannot summarize (see OLLAMA_HOST in ENVIRONMENT.md)"
 
+# Matches loosely: the unit adds flags between "cloudflared" and "tunnel run",
+# and another cloudflared on this host serves an unrelated project's tunnel.
 printf 'tunnel        : '
-pgrep -f "cloudflared tunnel run xavi-assistant" >/dev/null &&
+pgrep -f "cloudflared.*tunnel.*run xavi-assistant" >/dev/null &&
   echo "running (api.<domain> + n8n.<domain>)" ||
   echo "not running — only localhost answers"
 
