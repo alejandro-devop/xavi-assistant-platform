@@ -1060,3 +1060,35 @@ fase, con el gateway arrancado: `curl` a `/command` con "¿qué tengo hoy?"
 (espera el resumen de tu agenda) y con "revisa mi correo" (con correo sin
 leer, el resumen priorizado con `summarized: true`; sin nada, la línea
 amable; con Ollama caído, la lista simple con `summarized: false`).
+
+## Setup correction (2026-08-16, after the first real connection)
+
+Steps (1) through (6) above were run for the first time on 2026-08-16. What
+they got wrong, corrected here rather than rewritten above:
+
+1. **"Gmail read-only scope" is not achievable through the Gmail node.**
+   n8n hardcodes six scopes in `GmailOAuth2Api`, including
+   `https://mail.google.com/` (full mailbox access, deletion included),
+   `gmail.modify` and `gmail.compose`. Nothing chosen in Google Cloud Console
+   narrows this. The privacy claim in section 1 — only sender and subject are
+   ever read, nothing leaves the machine — remains true of the **workflow**;
+   it is not true of the **permission granted**. Closing that gap means
+   replacing the Gmail node with an HTTP Request node against a generic Google
+   OAuth2 credential scoped to `gmail.readonly`, which is a code change and
+   deserves its own feature.
+2. **The consent screen is now "Google Auth Platform"**
+   (`console.cloud.google.com/auth`), not "APIs & Services → OAuth consent
+   screen". Same correction as FEAT-002.
+3. **The app must be published.** External + _Testing_ fails the flow with
+   `403: access_denied`, and authorizations expire seven days after consent.
+   **Publish app** on the Audience tab; the resulting unverified-app warning
+   is passed through _Advanced_.
+4. **Two credentials, one OAuth client.** The Gmail and Calendar credentials
+   are separate objects in n8n but take the same Client ID and Client Secret.
+
+Both workflows were activated and the two phase tests ran on 2026-08-17.
+Gmail reads correctly (23 unread listed). The summarization leg does **not**
+work: the reply comes back with `summarized: false`, i.e. the degradation path
+this dossier designed for an Ollama failure. Filed as a bug — see
+`docs/bugs/QUEUE.md`. The acceptance criterion that the reply be a prioritized
+summary is therefore **not** met yet, even though the skill answers 200 OK.

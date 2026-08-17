@@ -862,3 +862,30 @@ curl respondería 502 mientras el workflow sigue resumiendo. Antes del paso
 en el registro (la a, la más quirúrgica), subir el timeout global, un modelo
 más pequeño, o aceptar 502-y-reintentar. Cualquiera de las tres primeras es
 un cambio de gateway: pide una feature nueva con la opción elegida.
+
+## Setup correction (2026-08-16, after the first real connection)
+
+The setup steps above were written before anyone had actually run them. Three
+of them turned out to be wrong or incomplete. Corrected here rather than
+rewritten above, so the record of what was assumed stays readable.
+
+1. **"Calendar read-only scope" is not achievable through the Calendar node.**
+   n8n hardcodes the scopes in `GoogleCalendarOAuth2Api`:
+   `https://www.googleapis.com/auth/calendar` and `.../calendar.events` —
+   read **and write**. Choosing a narrower scope in Google Cloud Console does
+   not change what n8n requests. Reading only is still true of the workflow's
+   behaviour; the granted permission is wider. Making the permission match the
+   behaviour means dropping the Calendar node for an HTTP Request node with a
+   generic Google OAuth2 credential — a code change, not a setup step.
+2. **The Google Cloud Console UI moved.** There is no "APIs & Services → OAuth
+   consent screen" any more; it is **Google Auth Platform**
+   (`console.cloud.google.com/auth`) with Branding / Audience / Clients /
+   Data Access tabs.
+3. **Publishing the app is mandatory, not optional.** An External app left in
+   _Testing_ rejects the consent flow with `403: access_denied`, and even when
+   a test user is added, Google expires the authorization seven days after
+   consent. Press **Publish app** on the Audience tab. The unverified-app
+   warning that replaces it is passed with _Advanced → Go to \<domain\>_.
+
+The n8n-side trap that cost the most time is recorded in
+`docs/bugs/ENVIRONMENT.md` under the OAuth callback gotcha.

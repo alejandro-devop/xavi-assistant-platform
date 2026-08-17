@@ -50,6 +50,15 @@ it's a browser tab, it starts no server.
   `curl -s -X POST http://localhost:5679/webhook/ping -H 'content-type: application/json' -d '{"text":"hi"}'`
   → `{"ok":true,"reply":"pong","receivedText":"hi",...}`
 - Ollama models: `curl -s http://localhost:11434/api/tags` (currently `qwen2.5:7b`)
+- All three workflows are active since 2026-08-17, with the Google Calendar
+  and Gmail credentials connected in the editor. The two skills answer through
+  the gateway (`POST /command` with `{"text": "..."}`, bearer token from
+  `apps/gateway/.env` — never print it). Known defect: the reply comes back
+  with `summarized: false`, the fallback path, because the Ollama node in the
+  workflow does not deliver. That is BUG-001, not a new discovery.
+- Inference is slower than the workflows assume: a representative summarizing
+  prompt measured 32.7 s from inside the container against `qwen2.5:7b`. The
+  node timeouts are 30 s (agenda) and 75 s (email-review).
 
 ## Routes or screens
 
@@ -109,8 +118,13 @@ model fails — the reply is never worse than the data behind it.
   see 5678 answering, it is NOT xavi's n8n.
 - **n8n workflow imports silently skip webhook registration** if the webhook
   node lacks a `webhookId` field, and imports arrive deactivated: activate with
-  `n8n update:workflow --id=<id> --active=true` and the container needs a
-  restart (by the user) to register production URLs.
+  `n8n publish:workflow --id=<id>` and the container needs a restart (by the
+  user) to register production URLs. The older `update:workflow --active=true`
+  still works on 2.34.6 but prints a deprecation warning. Activation does not
+  take effect until the restart — the command says so and means it.
+- **The n8n container has no `curl`.** To probe something from inside it, use
+  `docker exec xavi-assistant-n8n-1 node -e '...fetch(...)...'` — node is
+  there and its global `fetch` is enough for a one-off check.
 - **Ollama exists twice on this machine**: the native one on 11434 (ours) and a
   containerized `ai_ollama` from the other stack (not ours, no published
   ports). Always use `localhost:11434`; from inside n8n use
@@ -124,6 +138,20 @@ model fails — the reply is never worse than the data behind it.
   `network_mode: host`. Before blaming a workflow, check what the origin is
   bound to (`ss -tln`), and note this host runs no firewall: Ollama is now
   reachable from the LAN.
+- **Connecting an OAuth credential fails with `Unauthorized` unless the editor
+  and the callback share an origin.** n8n checks
+  `decryptedState.userId !== req.user?.id` on `/rest/oauth2-credential/callback`,
+  which needs the `n8n-auth` cookie on that request. The callback URL comes
+  from `N8N_EDITOR_BASE_URL`, falling back to `WEBHOOK_URL` — which here points
+  at the tunnel hostname. So logging into the editor on `localhost:5679` and
+  then pressing "Sign in with Google" sends Google's callback to the tunnel
+  domain, where the cookie does not exist, and n8n rejects it. Two ways out:
+  do the OAuth from the editor opened at the tunnel hostname (nothing to
+  change), or set `N8N_EDITOR_BASE_URL=http://localhost:5679/` and restart.
+  Register **both** callback URLs in the Google client and either works.
+- `WEBHOOK_URL` (used in `infra/docker-compose.yml`) is **deprecated** in
+  favour of `N8N_WEBHOOK_URL`. It still works; renaming it needs a container
+  restart, so it has not been done.
 - Secrets live only in `infra/.env` (gitignored). The repo is public: never
   write a real hostname token or credential into a tracked file — gitleaks runs
   in CI and there's a pre-commit hook (`.githooks/`).
