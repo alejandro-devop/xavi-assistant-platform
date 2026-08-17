@@ -83,6 +83,13 @@ export interface AgendaSkillResult {
    * Absent from pre-slice-2 payloads.
    */
   summarized?: boolean;
+  /**
+   * Why the summarization step was not used, present only when
+   * `summarized: false` (BUG-001). Carries the reason (a timeout, an empty
+   * or truncated answer), never calendar content — the whole point is that a
+   * degradation is visible without reading n8n's execution store.
+   */
+  summaryError?: string;
 }
 
 /**
@@ -115,6 +122,13 @@ export interface EmailReviewSkillResult {
    * from pre-slice-2 payloads.
    */
   summarized?: boolean;
+  /**
+   * Why the prioritization step was not used, present only when
+   * `summarized: false` (BUG-001). Carries the reason (a timeout, an empty
+   * or truncated answer), never sender or subject text — the whole point is
+   * that a degradation is visible without reading n8n's execution store.
+   */
+  summaryError?: string;
 }
 
 /**

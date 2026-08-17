@@ -9,9 +9,9 @@ rules for knowing _what's known_. The priority and state rules live in
 [PROTOCOL.md](PROTOCOL.md); this project's addresses and gotchas, in
 [ENVIRONMENT.md](ENVIRONMENT.md).
 
-| ID      | Priority | State    | Area  | Title                                                        | Reported   |
-| ------- | -------- | -------- | ----- | ------------------------------------------------------------ | ---------- |
-| BUG-001 | P1       | reported | infra | Email review never gives the prioritized summary it promises | 2026-08-16 |
+| ID      | Priority | State | Area  | Title                                                        | Reported   |
+| ------- | -------- | ----- | ----- | ------------------------------------------------------------ | ---------- |
+| BUG-001 | P1       | fixed | infra | Email review never gives the prioritized summary it promises | 2026-08-16 |
 
 ## Closed
 

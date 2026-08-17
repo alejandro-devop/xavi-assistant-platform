@@ -32,6 +32,12 @@ export const SKILLS: readonly SkillDescriptor[] = [
     // FEAT-004: the workflow's in-n8n Ollama summarization measured 4.4–33.8s
     // warm (FEAT-002); ~2× the worst observation covers slow runs and a cold
     // model load stacking on top of generation.
+    // BUG-001: these budgets are one chain and only move together —
+    //   Ollama node timeout  <  this budget  <  the caller's patience.
+    // The workflow's node now waits 50s (infra/n8n/workflows/agenda.json) plus
+    // ~0.4s of Calendar fetch, leaving ~9s here. Never let a node timeout
+    // reach this number: the gateway would abort first and the user would lose
+    // even the deterministic fallback, which is the whole point of the design.
     timeoutMs: 60_000,
   },
   {
@@ -42,6 +48,11 @@ export const SKILLS: readonly SkillDescriptor[] = [
     webhookPath: "email-review",
     // FEAT-004: expected slower than agenda — up to 25 items vs. 14 observed,
     // longer prioritization prompt (FEAT-003); agenda's 60s scaled by ~1.5×.
+    // BUG-001: same chain rule as agenda. The workflow's Ollama node waits 75s
+    // (infra/n8n/workflows/email-review.json) plus ~6.9s of Gmail fetch, so
+    // this leaves ~8s. That margin is thin on purpose — it is what makes the
+    // fallback reach the user instead of a 502 — so shrink the workflow's
+    // requested output, never grow its timeout.
     timeoutMs: 90_000,
   },
 ];
