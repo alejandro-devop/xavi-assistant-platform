@@ -46,6 +46,19 @@ it's a browser tab, it starts no server.
 
 - n8n workflows (no editor login needed):
   `docker exec xavi-assistant-n8n-1 n8n list:workflow`
+- **Stored n8n executions** (per-node timings, errors and every node's actual
+  input/output) — the fastest way to diagnose a workflow, and invisible in
+  `docker logs` when a node has `onError: continueRegularOutput`. The host has
+  no `sqlite3` CLI and the container no `curl`, so use n8n's own bundled
+  modules from `/usr/local/lib/node_modules/n8n/node_modules/.pnpm/`:
+  `docker exec xavi-assistant-n8n-1 node -e '…require(".../sqlite3@5.1.7/node_modules/sqlite3")…'`
+  against `/home/node/.n8n/database.sqlite` (open `OPEN_READONLY`). Executions
+  are in `execution_entity` (id, workflowId, status, startedAt, stoppedAt) and
+  `execution_data` (executionId, data). **`execution_data.data` is
+  `flatted`-encoded, not JSON** — `JSON.parse` fails on it; require the bundled
+  `flatted` from the same `.pnpm` directory and read
+  `parsed.resultData.runData[nodeName][0]` for `executionTime`,
+  `executionStatus`, `error` and `data.main[0]`.
 - The one working webhook (verified):
   `curl -s -X POST http://localhost:5679/webhook/ping -H 'content-type: application/json' -d '{"text":"hi"}'`
   → `{"ok":true,"reply":"pong","receivedText":"hi",...}`
@@ -56,9 +69,25 @@ it's a browser tab, it starts no server.
   `apps/gateway/.env` — never print it). Known defect: the reply comes back
   with `summarized: false`, the fallback path, because the Ollama node in the
   workflow does not deliver. That is BUG-001, not a new discovery.
-- Inference is slower than the workflows assume: a representative summarizing
-  prompt measured 32.7 s from inside the container against `qwen2.5:7b`. The
-  node timeouts are 30 s (agenda) and 75 s (email-review).
+- **Inference is much slower than the workflows assume.** `ollama ps` reports
+  `qwen2.5:7b  5.1 GB  35%/65% CPU/GPU` — the model does not fit the GTX 1050's
+  VRAM, so a third of it runs on 4 CPU cores. Measured repeatedly (BUG-001,
+  2026-08-16): **3.6–3.9 generated tokens/s**, prompt eval 10.7 s cold / ~0.2 s
+  cached. The real `email-review` prompt takes **82–99 s**; the real `agenda`
+  prompt takes 31 s at 3 events and 48 s at 6. The node timeouts are 30 s
+  (agenda) and 75 s (email-review), so both skills fall back. When budgeting a
+  workflow, budget the **output** length: prompt length is nearly free,
+  generation is ~0.27 s per token.
+  **And budget the model load.** Ollama unloads `qwen2.5:7b` after ~5 minutes
+  idle, so the call a real user makes usually finds it cold: `load_duration`
+  measured at **6.0–6.2 s** (BUG-001 fix, 2026-08-17), on top of the uncached
+  prompt eval. A number measured on a loaded model is ~16 s optimistic — that
+  gap is the whole margin of a workflow's node timeout. Check which state you
+  measured in: `/api/ps` on Ollama returns an empty `models` list when nothing
+  is loaded, and every `/api/generate` reply carries `load_duration`.
+  The earlier figures here (32.7 s for a "representative" prompt, "~6 s warm"
+  below) were measured on shortened or trivial prompts and are not
+  representative — do not size anything from them.
 
 ## Routes or screens
 
